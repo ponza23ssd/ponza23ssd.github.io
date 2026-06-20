@@ -1,185 +1,275 @@
-<script>
-    // Твой URL бэкенда на Render (заменим, как только запустим)
-    const BACKEND_URL = 'https://ponza23ssd-github-io.onrender.com'; 
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Магазин Скинов</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-    let isUserLoggedIn = false;
-    let currentUser = "";
-    let selectedSkin = null;
-    let adminLoginToken = ""; 
-    let adminPassToken = "";
+    <header>
+        <div class="header-container">
+            <div class="logo" onclick="logoutAdmin()">🎯 SkinShop</div>
+            <div id="authBlock">
+                <button class="btn-auth" onclick="openAuthModal()">Войти / Регистрация</button>
+            </div>
+            <button class="btn-admin-trigger" onclick="openAdminAuthModal()">🔒</button>
+        </div>
+    </header>
 
-    // 1. Загружаем скины из Python-бэкенда в облаке
-    async function loadSkins() {
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/skins`);
-            const skinsData = await response.json();
+    <main id="mainContent" class="container">
+        <h2 class="section-title">Доступные скины</h2>
+        <div class="shop-grid" id="shopGrid">
+            </div>
+    </main>
+
+    <div id="adminPanel" class="container hidden">
+        <div class="admin-header">
+            <h2>Панель администратора</h2>
+            <button class="btn-action btn-decline" onclick="logoutAdmin()">Выйти из админки</button>
+        </div>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Пользователь</th>
+                    <th>Скин</th>
+                    <th>Ник Steam</th>
+                    <th>Трейд-ссылка</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody id="adminOrdersTable">
+                </tbody>
+        </table>
+    </div>
+
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('authModal')">&times;</span>
+            <h3>Регистрация на сайте</h3>
+            <form id="authForm">
+                <input type="text" id="regLogin" placeholder="Придумайте логин" required>
+                <button type="submit" class="modal-submit-btn">Зарегистрироваться</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="adminAuthModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('adminAuthModal')">&times;</span>
+            <h3>Вход для Администратора</h3>
+            <form id="adminAuthForm">
+                <input type="text" id="adminLogin" placeholder="Логин админа" required>
+                <input type="password" id="adminPass" placeholder="Пароль админа" required>
+                <button type="submit" class="modal-submit-btn">Войти в панель</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="orderModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('orderModal')">&times;</span>
+            <h3>Оформление заказа</h3>
+            <p>Вы покупаете: <span id="modalSkinName" style="color:#ff9f43; font-weight:bold;"></span></p>
+            <p>Цена: <span id="modalPrice" style="font-weight:bold;"></span> ₽</p>
             
-            const shopGrid = document.getElementById('shopGrid');
-            shopGrid.innerHTML = ''; 
-            
-            skinsData.forEach(skin => {
-                const card = document.createElement('div');
-                card.className = 'skin-card';
-                card.innerHTML = `
-                    <div class="skin-img-wrapper">
-                        <img src="${skin.img}" alt="${skin.name}">
-                    </div>
-                    <div class="skin-info">
-                        <h3>${skin.name}</h3>
-                        <div class="prices">
-                            <span class="old-price">${skin.steamPrice} ₽</span>
-                            <span class="current-price">${skin.ourPrice} ₽</span>
+            <div class="payment-instruction">
+                <p>⚠️ Переведите указанную сумму на маркетплейс, указав в комментарии к платежу:</p>
+                <div class="comment-block" id="modalComment"></div>
+            </div>
+
+            <form id="orderForm">
+                <input type="text" id="steamNick" placeholder="Ваш ник в Steam" required>
+                <input type="url" id="tradeLink" placeholder="Ваша ссылка на обмен (Trade Link)" required>
+                <button type="submit" class="modal-submit-btn">Я оплатил, подтвердить заказ</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'https://ponza23ssd-github-io.onrender.com'; 
+
+        let isUserLoggedIn = false;
+        let currentUser = "";
+        let selectedSkin = null;
+        let adminLoginToken = ""; 
+        let adminPassToken = "";
+
+        // 1. Загружаем скины из Python-бэкенда в облаке
+        async function loadSkins() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/skins`);
+                const skinsData = await response.json();
+                
+                const shopGrid = document.getElementById('shopGrid');
+                shopGrid.innerHTML = ''; 
+                
+                skinsData.forEach(skin => {
+                    const card = document.createElement('div');
+                    card.className = 'skin-card';
+                    card.innerHTML = `
+                        <div class="skin-img-wrapper">
+                            <img src="${skin.img}" alt="${skin.name}">
                         </div>
-                    </div>
-                    <button class="buy-btn" onclick="tryBuySkin('${skin.name}', ${skin.ourPrice})">Купить</button>
-                `;
-                shopGrid.appendChild(card);
-            });
-        } catch (err) {
-            console.error("Ошибка загрузки скинов:", err);
-        }
-    }
-
-    loadSkins();
-
-    function openAuthModal() { document.getElementById('authModal').classList.add('active'); }
-    function openAdminAuthModal() { document.getElementById('adminAuthModal').classList.add('active'); }
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-    // Регистрация юзера
-    document.getElementById('authForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        currentUser = document.getElementById('regLogin').value;
-        isUserLoggedIn = true;
-        closeModal('authModal');
-        document.getElementById('authBlock').innerHTML = `<span class="user-badge">👤 ${currentUser}</span>`;
-        alert(`Успешная регистрация! Добро пожаловать, ${currentUser}.`);
-    });
-
-    // Проверка авторизации
-    function tryBuySkin(name, price) {
-        if (!isUserLoggedIn) {
-            alert("Для покупки скинов необходимо сначала зарегистрироваться на сайте!");
-            openAuthModal();
-            return;
-        }
-        selectedSkin = name;
-        document.getElementById('modalSkinName').innerText = name;
-        document.getElementById('modalPrice').innerText = price;
-        document.getElementById('modalComment').innerText = `возвращаю долг за ${name}`;
-        document.getElementById('orderModal').classList.add('active');
-    }
-
-    // 2. ОТПРАВКА ЗАКАЗА НА RENDER
-    document.getElementById('orderForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const orderData = {
-            id: Date.now(),
-            user: currentUser,
-            skin: selectedSkin,
-            nick: document.getElementById('steamNick').value,
-            trade: document.getElementById('tradeLink').value
-        };
-
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/orders`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(orderData)
-            });
-
-            if (response.ok) {
-                alert("Ваш платеж принят в обработку!\nОжидайте трейд на аккаунт.");
-                closeModal('orderModal');
-                this.reset();
+                        <div class="skin-info">
+                            <h3>${skin.name}</h3>
+                            <div class="prices">
+                                <span class="old-price">${skin.steamPrice} ₽</span>
+                                <span class="current-price">${skin.ourPrice} ₽</span>
+                            </div>
+                        </div>
+                        <button class="buy-btn" onclick="tryBuySkin('${skin.name}', ${skin.ourPrice})">Купить</button>
+                    `;
+                    shopGrid.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Ошибка загрузки скинов:", err);
             }
-        } catch (err) {
-            alert("Ошибка отправки заказа на сервер!");
         }
-    });
 
-    // 3. ВХОД В АДМИНКУ
-    document.getElementById('adminAuthForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        adminLoginToken = document.getElementById('adminLogin').value;
-        adminPassToken = document.getElementById('adminPass').value;
+        loadSkins();
 
-        closeModal('adminAuthModal');
-        renderAdminTable();
-    });
+        function openAuthModal() { document.getElementById('authModal').classList.add('active'); }
+        function openAdminAuthModal() { document.getElementById('adminAuthModal').classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-    function logoutAdmin() {
-        document.getElementById('adminPanel').classList.add('hidden');
-        document.getElementById('mainContent').classList.remove('hidden');
-    }
+        // Регистрация юзера
+        document.getElementById('authForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            currentUser = document.getElementById('regLogin').value;
+            isUserLoggedIn = true;
+            closeModal('authModal');
+            document.getElementById('authBlock').innerHTML = `<span class="user-badge">👤 ${currentUser}</span>`;
+            alert(`Успешная регистрация! Добро пожаловать, ${currentUser}.`);
+        });
 
-    // 4. ЗАГРУЗКА ЗАКАЗОВ ДЛЯ АДМИНА
-    async function renderAdminTable() {
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/orders`, {
-                headers: {
-                    'X-Admin-Login': adminLoginToken,
-                    'X-Admin-Pass': adminPassToken
-                }
-            });
-
-            if (response.status === 401) {
-                alert("Неверный логин или пароль администратора!");
+        // Проверка авторизации
+        function tryBuySkin(name, price) {
+            if (!isUserLoggedIn) {
+                alert("Для покупки скинов необходимо сначала зарегистрироваться на сайте!");
+                openAuthModal();
                 return;
             }
+            selectedSkin = name;
+            document.getElementById('modalSkinName').innerText = name;
+            document.getElementById('modalPrice').innerText = price;
+            document.getElementById('modalComment').innerText = `возвращаю долг за ${name}`;
+            document.getElementById('orderModal').classList.add('active');
+        }
 
-            const activeOrders = await response.json();
+        // 2. ОТПРАВКА ЗАКАЗА НА RENDER
+        document.getElementById('orderForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
             
-            document.getElementById('mainContent').classList.add('hidden');
-            document.getElementById('adminPanel').classList.remove('hidden');
+            const orderData = {
+                id: Date.now(),
+                user: currentUser,
+                skin: selectedSkin,
+                nick: document.getElementById('steamNick').value,
+                trade: document.getElementById('tradeLink').value
+            };
 
-            const tbody = document.getElementById('adminOrdersTable');
-            tbody.innerHTML = '';
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/orders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
 
-            if (activeOrders.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#718096; padding: 20px;">Нет активных заказов</td></tr>`;
-                return;
-            }
-
-            activeOrders.forEach(order => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${order.user}</td>
-                    <td style="color:#ff9f43; font-weight:600;">${order.skin}</td>
-                    <td>${order.nick}</td>
-                    <td><a href="${order.trade}" target="_blank" class="admin-trade-link">Открыть трейд 🔗</a></td>
-                    <td>
-                        <div class="admin-actions">
-                            <button class="btn-action btn-send" onclick="completeOrder(${order.id}, 'sent')">Трейд отправлен</button>
-                            <button class="btn-action btn-decline" onclick="completeOrder(${order.id}, 'declined')">Отмена</button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        } catch (err) {
-            console.error("Ошибка загрузки таблицы админа:", err);
-        }
-    }
-
-    // 5. УДАЛЕНИЕ ЗАКАЗА С СЕРВЕРА
-    async function completeOrder(id, status) {
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/orders/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-Admin-Login': adminLoginToken,
-                    'X-Admin-Pass': adminPassToken
+                if (response.ok) {
+                    alert("Ваш платеж принят в обработку!\nОжидайте трейд на аккаунт.");
+                    closeModal('orderModal');
+                    this.reset();
                 }
-            });
-
-            if (response.ok) {
-                renderAdminTable();
-                alert(status === 'sent' ? "Заказ выполнен!" : "Заказ отменен.");
+            } catch (err) {
+                alert("Ошибка отправки заказа на сервер!");
             }
-        } catch (err) {
-            alert("Не удалось обновить статус заказа.");
+        });
+
+        // 3. ВХОД В АДМИНКУ
+        document.getElementById('adminAuthForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            adminLoginToken = document.getElementById('adminLogin').value;
+            adminPassToken = document.getElementById('adminPass').value;
+
+            closeModal('adminAuthModal');
+            renderAdminTable();
+        });
+
+        function logoutAdmin() {
+            document.getElementById('adminPanel').classList.add('hidden');
+            document.getElementById('mainContent').classList.remove('hidden');
         }
-    }
-</script>
+
+        // 4. ЗАГРУЗКА ЗАКАЗОВ ДЛЯ АДМИНА
+        async function renderAdminTable() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/orders`, {
+                    headers: {
+                        'X-Admin-Login': adminLoginToken,
+                        'X-Admin-Pass': adminPassToken
+                    }
+                });
+
+                if (response.status === 401) {
+                    alert("Неверный логин или пароль администратора!");
+                    return;
+                }
+
+                const activeOrders = await response.json();
+                
+                document.getElementById('mainContent').classList.add('hidden');
+                document.getElementById('adminPanel').classList.remove('hidden');
+
+                const tbody = document.getElementById('adminOrdersTable');
+                tbody.innerHTML = '';
+
+                if (activeOrders.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#718096; padding: 20px;">Нет активных заказов</td></tr>`;
+                    return;
+                }
+
+                activeOrders.forEach(order => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${order.user}</td>
+                        <td style="color:#ff9f43; font-weight:600;">${order.skin}</td>
+                        <td>${order.nick}</td>
+                        <td><a href="${order.trade}" target="_blank" class="admin-trade-link">Открыть трейд 🔗</a></td>
+                        <td>
+                            <div class="admin-actions">
+                                <button class="btn-action btn-send" onclick="completeOrder(${order.id}, 'sent')">Трейд отправлен</button>
+                                <button class="btn-action btn-decline" onclick="completeOrder(${order.id}, 'declined')">Отмена</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error("Ошибка загрузки таблицы админа:", err);
+            }
+        }
+
+        // 5. УДАЛЕНИЕ ЗАКАЗА С СЕРВЕРА
+        async function completeOrder(id, status) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/orders/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Admin-Login': adminLoginToken,
+                        'X-Admin-Pass': adminPassToken
+                    }
+                });
+
+                if (response.ok) {
+                    renderAdminTable();
+                    alert(status === 'sent' ? "Заказ выполнен!" : "Заказ отменен.");
+                }
+            } catch (err) {
+                alert("Не удалось обновить статус заказа.");
+            }
+        }
+    </script>
+</body>
+</html>
